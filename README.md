@@ -179,12 +179,10 @@ from a previous run still holding the port. Kill everything and start clean:
 pkill -f "sim_vehicle|arducopter|ardusub|mavproxy|mavros_node|stonefish" ; sleep 2
 ```
 
-## Changes from upstream
+## Changes from upstream and Reference frames
 
 See `scripts/ardusim_patch.py` for the in-depth analysis of what changed and
 why.
-
-## Reference frames
 
 - ArduSim (ArduPilot's SITL) and Stonefish's world frame are both NED-like,
   with Z pointing down. This is the same convention behind the `accel_body`
