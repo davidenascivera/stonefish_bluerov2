@@ -1,113 +1,190 @@
-# Stonefish_BlueROV2 ROS2
-Simulaton of Blue Robtics BlueROV2 platform in Stonefish simulator with python plugin to attach the simulator to ArduSub SITL (Software-in-the-loop) in ROS2
+# Stonefish BlueROV2 ROS2 (fork)
 
-Tested on:
-- Ubuntu 24.04 with ROS Jazzy.
+Simulation of the Blue Robotics BlueROV2 in Stonefish, bridged to ArduSub SITL
+through ROS2.
 
-Requirements:
-- ROS2 with colon and DDS backend.
-- Stonefish Simulator installed as library.
-- Stonefish ROS2 wrapper.
-- Ardupilot SITL installation
-- OPTIONAL: ROS2 BlueROV2 driver: https://github.com/bvibhav/bluerov2_interface
+This is a fork of [bvibhav/stonefish_bluerov2](https://github.com/bvibhav/stonefish_bluerov2).
+The bridge script, `scripts/ardusim_patch.py`, is the main file in this repo.
+It's what actually talks to ArduPilot's JSON SITL backend, and the reason this
+fork exists is that the upstream version of that script sends two physical
+quantities (`accel_body`, `velocity`) in the wrong frame. See
+[Changes from upstream](#changes-from-upstream) for details.
 
-# ROS2
-Refer to installation at https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debians.html
+Tested on Ubuntu 22.04, ROS2 Humble, Stonefish 1.3.
 
-# Stonefish
-Refer to documentation at https://github.com/patrykcieslak/stonefish for installation. Checkout following brach for scene files compatibilty before building the library. 
+## Compatibility
 
-`git checkout v1.3`
+This bridge targets **Stonefish 1.3** and **stonefish_ros2 v1.3**. The
+accelerometer fix in `ardusim_patch.py` assumes the IMU topic published by
+`stonefish_ros2` does *not* include gravity (true for 1.3).
 
-# Stonefish ROS
-Create a colcon workspace as suggested in ROS2 documentation: https://docs.ros.org/en/foxy/Tutorials/Beginner-Client-Libraries/Colcon-Tutorial.html
+**If you move to Stonefish 1.5 or later, gravity is already included in the
+IMU topic published by the bluerov2 node.** Applying this patch unmodified on
+top of that will add gravity twice and break the EKF. Don't upgrade Stonefish
+without revisiting this.
 
-Refer to installation instruction at https://github.com/patrykcieslak/stonefish_ros2. Make sure to checkout follwoing branch before building. 
+## Requirements
 
-`git checkout v1.3`
+- ROS2 with colcon and the DDS backend (Humble tested)
+- Stonefish simulator, `v1.3` branch
+- stonefish_ros2 wrapper, `v1.3` branch
+- ArduPilot SITL (ArduSub)
 
-# Ardupilot SITL
-Refer to this page for setting up Ardupolit SITL: https://ardupilot.org/dev/docs/building-setup-linux.html#building-setup-linux.
+## Setup
 
-Make sure to install all submodules if things don't work as intended. 
+### Option A: Docker
 
-```
-git clone --recurse-submodules https://github.com/ArduPilot/ardupilot
-cd ardupilot
-```
+The `Dockerfile` in the repo root builds Stonefish, stonefish_ros2, and this
+bridge into one image. It does **not** include ArduPilot SITL, so run that on
+the host, or in a separate container; `sim_vehicle.py` and the simulator only
+need to reach each other over the network.
 
-Don't forget to install the required packages as suggested in the documentation and adding to linux profile. 
-
-```
-Tools/environment_install/install-prereqs-ubuntu.sh -y
-. ~/.profile
-```
-
-Ardupilot should be ready to use at this point. 
-
-## Testing ArduPilot SITL for BlueROV2
-Run following commands to test that ArduSub is running porperly. For the first time the system will build the firmware for ArduPilot SITL to use. 
-
-```
-cd ardupilot 
-sim_vehicle.py -v ArduSub --map 
+Build:
+```bash
+cd src/stonefish_bluerov2
+docker build -t stonefish-bluerov2:latest .
 ```
 
-This will put the simulated vehicle in middle of nowhere going in to the ground. JUST AMAZING!!!
-
-cd into this location in `ardupilot` directory `/home/bvibhav/Ardupilot/Tools/autotest/` and edit `locations.txt`. Add this line at the very bottom. 
-
-`PHILL=56.026930,-3.385670,0,0`
-
-Now run the commands again
-
+Run (`--network host` is what lets `ros2 topic list` work from the host
+machine):
+```bash
+xhost +local:docker   # allow X11 for the Stonefish GUI
+docker run -it --rm \
+  --network host \
+  --env DISPLAY=$DISPLAY \
+  --volume /tmp/.X11-unix:/tmp/.X11-unix \
+  --gpus all \
+  --device /dev/dri \
+  --env NVIDIA_DRIVER_CAPABILITIES=all \
+  stonefish-bluerov2:latest
 ```
-cd ardupilot 
-sim_vehicle.py -v ArduSub --map -L PHILL
+Running the container launches the simulation automatically. If you need to
+relaunch it manually from inside the shell, the `run-stonefish` alias does
+the same thing (`ros2 launch stonefish_bluerov2 bluerov2_sim.py`).
+
+### Option B: Manual install
+
+1. **ROS2**: follow the [official install guide for Humble](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debians.html).
+
+2. **Stonefish**: clone and build [patrykcieslak/stonefish](https://github.com/patrykcieslak/stonefish),
+   checking out `v1.3` *before* building. Later versions change what the IMU
+   topic contains (see Compatibility above).
+
+3. **stonefish_ros2**: set up a colcon workspace as described in the
+   [colcon tutorial](https://docs.ros.org/en/humble/Tutorials/Beginner-Client-Libraries/Colcon-Tutorial.html),
+   clone [patrykcieslak/stonefish_ros2](https://github.com/patrykcieslak/stonefish_ros2)
+   into it, and check out `v1.3`.
+
+4. **ArduPilot SITL**: follow the
+   [ArduPilot Linux build guide](https://ardupilot.org/dev/docs/building-setup-linux.html#building-setup-linux):
+   ```bash
+   git clone --recurse-submodules https://github.com/ArduPilot/ardupilot
+   cd ardupilot
+   Tools/environment_install/install-prereqs-ubuntu.sh -y
+   . ~/.profile
+   ```
+   Make sure the submodules actually came down. A shallow/partial clone is
+   the most common reason this silently doesn't work. At this point
+   [QGroundControl](https://qgroundcontrol.com/downloads/) should be able to
+   connect to the (still unsimulated) vehicle.
+
+5. Extra system packages this fork needed, that aren't always pulled in by
+   the steps above:
+   ```bash
+   sudo apt install gcc-arm-none-eabi
+   sudo apt install libglm-dev libsdl2-dev libfreetype-dev libgl-dev libglu1-mesa-dev
+   sudo apt install ros-humble-mavros ros-humble-mavros-extras
+   sudo apt install ros-humble-tf-transformations
+   sudo /opt/ros/humble/lib/mavros/install_geographiclib_datasets.sh
+   ```
+
+6. If you have conda on the same machine, deactivate it before building or
+   running anything ROS2-related, since the two environments conflict:
+   ```bash
+   conda deactivate
+   ```
+
+7. Clone this repo into your workspace and build:
+   ```bash
+   cd ~/ros2_ws/src
+   git clone <this-repo-url>
+   cd ~/ros2_ws
+   colcon build --event-handlers console_direct+ --cmake-args --symlink-install --packages-select stonefish_bluerov2
+   ```
+
+## Running the simulation
+
+### BlueROV2
+
+Four terminals:
+
+```bash
+# 1: ArduSub SITL
+sim_vehicle.py -v ArduSub --model JSON --map -L PHILL -m --streamrate=-1 --out udp:127.0.0.1:14551
+```
+This will complain about "link 1 down" until the simulator side connects.
+That's expected at this point, not a problem.
+
+```bash
+# 2: Stonefish + BlueROV2
+source ~/ros2_ws/install/setup.bash
+ros2 launch stonefish_bluerov2 bluerov2_sim.py
 ```
 
-At this point, you should be able to control the vehicle with `QGroundControl` (https://qgroundcontrol.com/downloads/).
-
-## Running Ardupilot SITL with your own simulator
-Run this command to start SITL with JSON simulator instead. This will let us connect to our own simulator on the local machine (this can be changed later for different IP).
-
-```
-sim_vehicle.py -v ArduSub --model JSON  --map -L PHILL -m --streamrate=-1
+```bash
+# 3: MAVROS
+mavros_node --ros-args -p fcu_url:=udp://127.0.0.1:14551@
 ```
 
-This will complain about link 1 down as SITL is not getting anything from simulator side. 
+```bash
+# 4: optional sanity check
+ros2 topic list
+ros2 topic echo /mavros/imu/data
+```
 
-# Buidling/Running this Simulation
-- Clone this repository to your colcon workspace.
-- Build the package using symlink method like this: 
+In QGroundControl: vehicle setup → change the vehicle configuration to
+**Vectored-6DOF**, and enable joystick input.
 
-    ```
-    colcon build --event-handlers console_direct+ --cmake-args --symlink-install --packages-select stonefish_bluerov2
-    ```
+## Common problems
 
-- Then launch the simulation: 
+**Stonefish shows "No frame from SITL, is it running?"**: ArduPilot SITL is
+probably not running, or hasn't connected yet. Check the ArduSub terminal.
 
-    ```
-    ros2 launch stonefish_bluerov2 bluerov2_sim.py
-    ```
+**ArduSub SITL stays stuck waiting for a heartbeat**, something like:
+```
+Log Directory:
+Telemetry log: mav.tlog
+Waiting for heartbeat from tcp:127.0.0.1:5760
+MAV> link 1 down
+```
+This means Stonefish isn't sending frames, for one of two reasons: either
+something in a recent change broke the bridge, or there's a leftover instance
+from a previous run still holding the port. Kill everything and start clean:
+```bash
+pkill -f "sim_vehicle|arducopter|ardusub|mavproxy|mavros_node|stonefish" ; sleep 2
+```
 
-- Finally, open QGroundControl, got to vehicle setup and chnage the vehicle configuation to `Vectored-6DOF`.
-- Also enable jostick intput in QGC. 
+## Changes from upstream
 
-At this point, you are setup and should be able to control the vehicle using QGC or BlueROV2 driver of your choice. 
+See `scripts/ardusim_patch.py` for the in-depth analysis of what changed and
+why.
 
-You can use a barebones ROS2 driver from here: https://github.com/bvibhav/bluerov2_interface
+## Reference frames
 
-# Running Rover/Boat Simulation
-- Vehicle frame `-v Rover` or `-v ArduSub` is not required if running in firmware type folder. This ideal if you are going to run multiple firmware using same Ardupilot directory. 
-    ```
-    cd ~/ardupilot/Rover
-    sim_vehicle.py --model JSON --map -L PHILL -m --streamrate=-1
-    ```
+- ArduSim (ArduPilot's SITL) and Stonefish's world frame are both NED-like,
+  with Z pointing down. This is the same convention behind the `accel_body`
+  fix mentioned above.
+- MAVROS, by default, converts most position/orientation topics to ENU
+  before publishing them on ROS, so `/mavros/local_position/pose` and
+  `/mavros/imu/data` are Z-up. Depth still comes out **negative** once the
+  vehicle is underwater, and that's expected, not a bug: in an up-positive
+  frame, being below the origin (roughly the surface) just means negative Z,
+  same as a negative altitude.
 
-- Run the simulation side of things. 
-    ```
-    ros2 launch stonefish_bluerov2 blueboat_sim.py
-    ```
+## References
 
-- Run QGroundControl and for the first time loat the default parameters from here: https://github.com/bluerobotics/Blueos-Parameter-Repository/tree/master/params/ardupilot/ArduRover/4.5/Navigator
+- ArduSub developer docs: https://www.ardusub.com/developers/developers.html
+- Stonefish: https://github.com/patrykcieslak/stonefish
+- stonefish_ros2: https://github.com/patrykcieslak/stonefish_ros2
+- Upstream repo: https://github.com/bvibhav/stonefish_bluerov2
+- BlueROV2 ROS2 driver: https://github.com/bvibhav/bluerov2_interface
