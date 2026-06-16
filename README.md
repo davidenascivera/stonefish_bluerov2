@@ -83,8 +83,7 @@ the same thing (`ros2 launch stonefish_bluerov2 bluerov2_sim.py`).
    Tools/environment_install/install-prereqs-ubuntu.sh -y
    . ~/.profile
    ```
-   Make sure the submodules actually came down. A shallow/partial clone is
-   the most common reason this silently doesn't work. At this point
+   At this point
    [QGroundControl](https://qgroundcontrol.com/downloads/) should be able to
    connect to the (still unsimulated) vehicle.
 
