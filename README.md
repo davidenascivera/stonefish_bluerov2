@@ -35,9 +35,10 @@ without revisiting this.
 ### Option A: Docker
 
 The `Dockerfile` in the repo root builds Stonefish, stonefish_ros2, and this
-bridge into one image. It does **not** include ArduPilot SITL, so run that on
-the host, or in a separate container; `sim_vehicle.py` and the simulator only
-need to reach each other over the network.
+bridge into one image, but that's only the simulator side. You'll still need
+ROS2 (for MAVROS), QGroundControl, and ArduPilot SITL installed on the host;
+see [Running the simulation](#running-the-simulation) below for the actual
+commands.
 
 Build:
 ```bash
@@ -62,6 +63,17 @@ Running the container launches the simulation automatically. If you need to
 relaunch it manually from inside the shell, the `run-stonefish` alias does
 the same thing (`ros2 launch stonefish_bluerov2 bluerov2_sim.py`).
 
+If `ros2 topic echo` (or `list`) doesn't see anything from the host, even
+with `--network host`, the DDS daemon on the host is often still trying
+shared-memory transport, which doesn't cross the container boundary. Force
+UDP and restart the daemon:
+```bash
+export FASTDDS_BUILTIN_TRANSPORTS=UDPv4
+ros2 daemon stop
+```
+Then retry the `ros2 topic` command — the daemon restarts automatically and
+picks up the new transport setting.
+
 ### Option B: Manual install
 
 1. **ROS2**: follow the [official install guide for Humble](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debians.html).
@@ -83,7 +95,8 @@ the same thing (`ros2 launch stonefish_bluerov2 bluerov2_sim.py`).
    Tools/environment_install/install-prereqs-ubuntu.sh -y
    . ~/.profile
    ```
-   At this point
+   Make sure the submodules actually came down. A shallow/partial clone is
+   the most common reason this silently doesn't work. At this point
    [QGroundControl](https://qgroundcontrol.com/downloads/) should be able to
    connect to the (still unsimulated) vehicle.
 
@@ -129,6 +142,9 @@ That's expected at this point, not a problem.
 source ~/ros2_ws/install/setup.bash
 ros2 launch stonefish_bluerov2 bluerov2_sim.py
 ```
+If you didn't clone the repo locally and went with [Docker](#option-a--docker)
+instead, skip this step — running the container already launches the
+simulation automatically.
 
 ```bash
 # 3: MAVROS
