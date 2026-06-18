@@ -1,0 +1,50 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+SHELL ["/bin/bash", "-c"]
+
+ARG USERNAME=ardupilot
+ARG USER_UID=1000
+ARG USER_GID=1000
+
+RUN apt-get update && apt-get install -y \
+    git sudo lsb-release tzdata ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd --gid ${USER_GID} ${USERNAME} \
+    && useradd --uid ${USER_UID} --gid ${USER_GID} -m ${USERNAME} \
+    && usermod -aG sudo,dialout ${USERNAME} \
+    && echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME}
+
+USER ${USERNAME}
+ENV USER=${USERNAME}
+WORKDIR /home/${USERNAME}
+
+RUN git config --global http.postBuffer 1048576000 \
+    && git config --global http.version HTTP/1.1 \
+    && for i in 1 2 3 4 5; do \
+         git clone --depth 1 --shallow-submodules --recurse-submodules \
+           https://github.com/ArduPilot/ardupilot.git && break || sleep 5; \
+       done
+
+WORKDIR /home/${USERNAME}/ardupilot
+
+RUN Tools/environment_install/install-prereqs-ubuntu.sh -y
+
+# Compila ArduSub per il board "sitl" durante la build dell'immagine, cosi'
+# ogni container nuovo (anche --rm) parte con il binario gia' pronto invece
+# di ricompilare al primo sim_vehicle.py.
+RUN ./waf configure --board sitl && ./waf sub
+
+RUN echo "source ~/.profile" >> ~/.bashrc
+
+# PHILL e' una location custom (non upstream): aggiunta a parte per non
+# rischiare di corrompere l'ultima riga del file se manca il newline finale.
+RUN printf '\nPHILL=56.026930,-3.385670,0,0\n' >> Tools/autotest/locations.txt
+
+# install-prereqs installa MAVProxy con `pip install --user`, quindi finisce
+# in ~/.local/bin: lo mettiamo in PATH a livello immagine cosi' e' sempre
+# disponibile, anche se .bashrc/.profile non vengono sourcati (es. docker exec).
+ENV PATH="/home/${USERNAME}/ardupilot/Tools/autotest:/home/${USERNAME}/.local/bin:${PATH}"
+
+CMD ["sim_vehicle.py", "-v", "ArduSub", "--model", "JSON", "--map", "-L", "PHILL", "-m", "--streamrate=-1", "--out", "udp:127.0.0.1:14551", "--no-rebuild"]

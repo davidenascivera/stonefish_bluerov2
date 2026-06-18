@@ -1,0 +1,50 @@
+# NOTE: this docker composer is ment to be used in your ros2 workspace
+
+# HOW TO BUILD
+# The first time docker compose up --build
+
+# HOW TO RUN
+# xhost +local:
+# docker compose up
+
+
+
+services:
+  ardusub:
+    build:
+      context: ./src/stonefish_bluerov2/Docker
+      dockerfile: Dockerfile.ardusub
+    container_name: ardusub-sitl
+    network_mode: host
+    environment:
+      - DISPLAY=${DISPLAY}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    stdin_open: true
+    tty: true
+
+  stonefish:
+    build:
+      context: ./src/stonefish_bluerov2
+      dockerfile: Docker/Dockerfile.stonefish
+    container_name: stonefish-bluerov2
+    network_mode: host
+    environment:
+      - DISPLAY=${DISPLAY}
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    devices:
+      - /dev/dri:/dev/dri
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    depends_on:
+      - ardusub
+    stdin_open: true
+    tty: true
+
