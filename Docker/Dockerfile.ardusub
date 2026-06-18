@@ -47,4 +47,9 @@ RUN printf '\nPHILL=56.026930,-3.385670,0,0\n' >> Tools/autotest/locations.txt
 # disponibile, anche se .bashrc/.profile non vengono sourcati (es. docker exec).
 ENV PATH="/home/${USERNAME}/ardupilot/Tools/autotest:/home/${USERNAME}/.local/bin:${PATH}"
 
-CMD ["sim_vehicle.py", "-v", "ArduSub", "--model", "JSON", "--map", "-L", "PHILL", "-m", "--streamrate=-1", "--out", "udp:127.0.0.1:14551", "--no-rebuild"]
+# FRAME_CONFIG=2 (Vectored6DOF), richiesto per BlueROV2 (vedi CLAUDE.md).
+# Applicato ad ogni avvio via --add-param-file invece di richiedere il
+# settaggio manuale del frame da QGroundControl.
+COPY ardusub-defaults.parm /home/${USERNAME}/ardusub-defaults.parm
+
+CMD ["sim_vehicle.py", "-v", "ArduSub", "--model", "JSON", "--map", "-L", "PHILL", "-m", "--streamrate=-1", "--out", "udp:127.0.0.1:14551", "--no-rebuild", "--add-param-file=../ardusub-defaults.parm"]
