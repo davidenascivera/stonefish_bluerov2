@@ -53,3 +53,20 @@ ENV PATH="/home/${USERNAME}/ardupilot/Tools/autotest:/home/${USERNAME}/.local/bi
 COPY ardusub-defaults.parm /home/${USERNAME}/ardusub-defaults.parm
 
 CMD ["sim_vehicle.py", "-v", "ArduSub", "--model", "JSON", "--map", "-L", "PHILL", "-m", "--streamrate=-1", "--out", "udp:127.0.0.1:14551", "--no-rebuild", "--add-param-file=../ardusub-defaults.parm"]
+
+
+
+# COME BUILDARE (il context deve essere la cartella Docker/, perche' la build
+# fa COPY di ardusub-defaults.parm). Il binario di ArduSub viene compilato qui
+# durante la build, quindi questo step e' lungo la prima volta.
+# cd ~/ros2_ws_ardusub/src/stonefish_bluerov2/Docker
+# docker build -f Dockerfile.ardusub -t ardusub:latest .
+#
+# COME ESEGUIRE (--network host per esporre SITL/MAVLink all'host; X11 serve
+# per la mappa di MAVProxy aperta da --map)
+# xhost +local:root              # abilita X11 per la finestra della mappa
+# docker run -it --rm \
+#   --network host \
+#   --env DISPLAY=$DISPLAY \
+#   --volume /tmp/.X11-unix:/tmp/.X11-unix \
+#   ardusub:latest
