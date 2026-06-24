@@ -12,6 +12,47 @@ quantities (`accel_body`, `velocity`) in the wrong frame. See
 
 Tested on Ubuntu 22.04, ROS2 Humble, Stonefish 1.3.
 
+
+## Run with Docker Compose
+
+The `docker-compose.yml` brings up two containers: `ardusub` (ArduSub SITL) and
+`stonefish` (the Stonefish simulator GUI).
+
+**1. Set up the workspace folder**
+
+```bash
+mkdir -p ros2_ws_ardusub/src
+cd ros2_ws_ardusub/src
+git clone https://github.com/davidenascivera/stonefish_bluerov2.git
+cd ..
+```
+
+**2. Copy the compose file to the workspace root**
+
+`docker-compose.yml` ships inside the package (`src/stonefish_bluerov2/Docker/`),
+but must sit at the root of `ros2_ws_ardusub/` (next to `src/`), since its build
+context points at `./src/stonefish_bluerov2`:
+
+```bash
+cp src/stonefish_bluerov2/Docker/docker-compose.yml .
+```
+
+**3. Build the images (first time only)**
+
+```bash
+docker compose up --build
+```
+
+**4. Subsequent runs**
+
+The Stonefish container opens an OpenGL/X11 window, so the host X server must let
+the container connect. Grant access once per login, then start:
+
+```bash
+xhost +local:root      # let local root (the container user) reach the X server
+docker compose up
+```
+
 ## Compatibility
 
 This bridge targets **Stonefish 1.3** and **stonefish_ros2 v1.3**. The
